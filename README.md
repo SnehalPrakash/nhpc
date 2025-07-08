@@ -32,7 +32,7 @@
 
 4. Access the application:
    ```
-   http://localhost/cws/
+   http://localhost/path_to_project
    ```
 
 ## Project Structure
