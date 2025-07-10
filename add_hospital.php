@@ -24,6 +24,13 @@
             line-height: 1.6;
         }
         
+        .header-image {
+            width: 100%;
+            max-height: 150px;
+            object-fit: contain;
+            margin-bottom: 2rem;
+        }
+
         .container {
             max-width: 800px;
             background: #fff;
@@ -122,6 +129,7 @@
 </head>
 <body>
 <div class="container">
+    <img src="certify.jpeg" alt="NHPC Logo" class="header-image">
     <h2 class="animate__animated animate__fadeInDown">Add Hospital Details</h2>
     <form action="save_hospital.php" method="post" enctype="multipart/form-data" class="animate__animated animate__fadeIn animate__delay-1s needs-validation" novalidate>
         <div class="row mb-4">
@@ -131,8 +139,9 @@
                 <div class="form-text text-muted">This field is required</div>
             </div>
             <div class="col-md-6 mb-3">
-                <label class="form-label">Name (Hindi)</label>
-                <input type="text" name="name_hi" class="form-control" placeholder="Enter hospital name in Hindi">
+                <label class="form-label">Name (Hindi) <span class="text-danger">*</span></label>
+                <input type="text" name="name_hi" class="form-control" required placeholder="Enter hospital name in Hindi">
+                <div class="form-text text-muted">This field is required</div>
             </div>
         </div>
 
@@ -143,8 +152,45 @@
                 <div class="form-text text-muted">Please provide the full address</div>
             </div>
             <div class="col-md-6 mb-3">
-                <label class="form-label">Address (Hindi)</label>
-                <textarea name="address_hi" class="form-control" placeholder="Enter complete address in Hindi" rows="3"></textarea>
+                <label class="form-label">Address (Hindi) <span class="text-danger">*</span></label>
+                <textarea name="address_hi" class="form-control" required placeholder="Enter complete address in Hindi" rows="3"></textarea>
+                <div class="form-text text-muted">Please provide the full address</div>
+            </div>
+        </div>
+
+        <div class="row mb-4">
+            <div class="col-md-6 mb-3">
+                <label class="form-label">State <span class="text-danger">*</span></label>
+                <select name="state" class="form-control" required>
+                    <option value="">Select State</option>
+                    <?php
+                    require 'db.php';
+                    $stmt = $pdo->query("SELECT name FROM states ORDER BY name");
+                    while ($row = $stmt->fetch()) {
+                        echo '<option value="' . htmlspecialchars($row['name']) . '">' . htmlspecialchars($row['name']) . '</option>';
+                    }
+                    ?>
+                </select>
+            </div>
+            <div class="col-md-6 mb-3">
+                <label class="form-label">Payment Scheme <span class="text-danger">*</span></label>
+                <select name="payment_scheme" class="form-control" required>
+                    <option value="">Select Payment Scheme</option>
+                    <option value="Direct">Direct Payment Scheme</option>
+                    <option value="Non-Direct">Non-Direct Payment Scheme</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="row mb-4">
+            <div class="col-md-6 mb-3">
+                <label class="form-label">Contact Person <span class="text-danger">*</span></label>
+                <input type="text" name="contact_person" class="form-control" required placeholder="Enter contact person name">
+            </div>
+            <div class="col-md-6 mb-3">
+                <label class="form-label">Contact Number <span class="text-danger">*</span></label>
+                <input type="tel" name="contact_number" class="form-control" required pattern="[0-9]{10}" placeholder="Enter 10-digit contact number">
+                <div class="form-text text-muted">Enter a valid 10-digit mobile number</div>
             </div>
         </div>
 
@@ -195,6 +241,7 @@
             <textarea name="facilitation" class="form-control" placeholder="Enter facilitation details" rows="2"></textarea>
             <div class="form-text text-muted">Describe the facilities and services available</div>
         </div>
+
         <div class="d-flex justify-content-center gap-3 mt-4">
             <button type="submit" class="btn btn-primary">
                 <i class="fas fa-save me-2"></i>Save
@@ -205,67 +252,61 @@
         </div>
     </form>
 </div>
+
 <script src="https://kit.fontawesome.com/a076d05399.js" crossorigin="anonymous"></script>
 <script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.querySelector('form');
+    const formGroups = document.querySelectorAll('.form-control');
 
-    document.addEventListener('DOMContentLoaded', function() {
-        const form = document.querySelector('form');
-        const formGroups = document.querySelectorAll('.form-control');
-
-
-        formGroups.forEach((group, index) => {
-            group.addEventListener('focus', function() {
-                this.closest('.col-md-6, .col-md-4, .mb-4').classList.add('animate__animated', 'animate__pulse');
-            });
-            group.addEventListener('blur', function() {
-                this.closest('.col-md-6, .col-md-4, .mb-4').classList.remove('animate__animated', 'animate__pulse');
-            });
+    formGroups.forEach((group, index) => {
+        group.addEventListener('focus', function() {
+            this.closest('.col-md-6, .col-md-4, .mb-4').classList.add('animate__animated', 'animate__pulse');
         });
-
-
-        form.addEventListener('submit', function(event) {
-            if (!form.checkValidity()) {
-                event.preventDefault();
-                event.stopPropagation();
-
-
-                const invalidFields = form.querySelectorAll(':invalid');
-                invalidFields.forEach(field => {
-                    const fieldContainer = field.closest('.col-md-6, .col-md-4, .mb-4');
-                    fieldContainer.classList.add('animate__animated', 'animate__shakeX');
-                    setTimeout(() => {
-                        fieldContainer.classList.remove('animate__animated', 'animate__shakeX');
-                    }, 1000);
-                });
-            }
-
-            form.classList.add('was-validated');
-        }, false);
-
-        const validFrom = document.querySelector('input[name="valid_from"]');
-        const validUpto = document.querySelector('input[name="valid_upto"]');
-        const regValidUpto = document.querySelector('input[name="reg_valid_upto"]');
-
-        validUpto.addEventListener('change', function() {
-            if (validFrom.value && validUpto.value && validFrom.value > validUpto.value) {
-                validUpto.setCustomValidity('Valid Upto date must be after Valid From date');
-            } else {
-                validUpto.setCustomValidity('');
-            }
-        });
-
-        validFrom.addEventListener('change', function() {
-            validUpto.dispatchEvent(new Event('change'));
+        group.addEventListener('blur', function() {
+            this.closest('.col-md-6, .col-md-4, .mb-4').classList.remove('animate__animated', 'animate__pulse');
         });
     });
+
+    form.addEventListener('submit', function(event) {
+        if (!form.checkValidity()) {
+            event.preventDefault();
+            event.stopPropagation();
+
+            const invalidFields = form.querySelectorAll(':invalid');
+            invalidFields.forEach(field => {
+                const fieldContainer = field.closest('.col-md-6, .col-md-4, .mb-4');
+                fieldContainer.classList.add('animate__animated', 'animate__shakeX');
+                setTimeout(() => {
+                    fieldContainer.classList.remove('animate__animated', 'animate__shakeX');
+                }, 1000);
+            });
+        }
+
+        form.classList.add('was-validated');
+    }, false);
+
+    const validFrom = document.querySelector('input[name="valid_from"]');
+    const validUpto = document.querySelector('input[name="valid_upto"]');
+    const regValidUpto = document.querySelector('input[name="reg_valid_upto"]');
+    const contactNumber = document.querySelector('input[name="contact_number"]');
+
+    validUpto.addEventListener('change', function() {
+        if (validFrom.value && validUpto.value && validFrom.value > validUpto.value) {
+            validUpto.setCustomValidity('Valid Upto date must be after Valid From date');
+        } else {
+            validUpto.setCustomValidity('');
+        }
+    });
+
+    validFrom.addEventListener('change', function() {
+        validUpto.dispatchEvent(new Event('change'));
+    });
+
+    contactNumber.addEventListener('input', function() {
+        this.value = this.value.replace(/[^0-9]/g, '').slice(0, 10);
+    });
+});
 </script>
-
-
-
-
-
-
-
-
 </body>
 </html>
