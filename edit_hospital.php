@@ -10,6 +10,67 @@ if (!can_edit()) {
 $hospitalId = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+
+    $uploadDir = 'emp_hospital/HospRateList/';
+    if (!is_dir($uploadDir)) {
+        if (!mkdir($uploadDir, 0775, true)) {
+            $_SESSION['error'] = 'Critical Error: Could not create upload directory. Please check server permissions.';
+            error_log('Failed to create upload directory on edit: ' . $uploadDir);
+            header('Location: edit_hospital.php?id=' . $hospitalId);
+            exit;
+        }
+    }
+    if (!is_writable($uploadDir)) {
+        $_SESSION['error'] = 'Critical Error: The upload directory is not writable. Please check server permissions.';
+        error_log('Upload directory is not writable on edit: ' . $uploadDir);
+        header('Location: edit_hospital.php?id=' . $hospitalId);
+        exit;
+    }
+
+
+    /**
+     * Handles a single file upload for editing.
+     * @param string $fileKey The key in the $_FILES array.
+     * @param string $uploadDir The directory to upload the file to.
+     * @param string $existingPath The path of the existing file to be replaced.
+     * @return array An array with 'path' on success or 'error' on failure.
+     */
+    function handle_upload_edit(string $fileKey, string $uploadDir, string $existingPath): array
+    {
+        if (isset($_FILES[$fileKey]) && $_FILES[$fileKey]['error'] === UPLOAD_ERR_OK) {
+            if ($_FILES[$fileKey]['size'] > 10000000) { // 10MB limit
+                return ['error' => 'File ' . htmlspecialchars($fileKey) . ' is too large.'];
+            }
+
+            $allowed_types = ['application/pdf', 'image/jpeg', 'image/png'];
+            $finfo = new finfo(FILEINFO_MIME_TYPE);
+            $mime_type = $finfo->file($_FILES[$fileKey]['tmp_name']);
+
+            if (!in_array($mime_type, $allowed_types)) {
+                return ['error' => 'Invalid file type for ' . htmlspecialchars($fileKey) . '.'];
+            }
+
+            $filename = uniqid() . '_' . basename(htmlspecialchars($_FILES[$fileKey]['name']));
+            $target_path = $uploadDir . $filename;
+
+            if (move_uploaded_file($_FILES[$fileKey]['tmp_name'], $target_path)) {
+                // Delete old file if it exists
+                if (!empty($existingPath) && file_exists($existingPath)) {
+                    unlink($existingPath);
+                }
+                return ['path' => $target_path];
+            } else {
+                return ['error' => 'Failed to move uploaded file for ' . htmlspecialchars($fileKey) . '.'];
+            }
+        }
+
+        return ['path' => $existingPath];
+    }
+
+    $approv_order_res = handle_upload_edit('approv_order_accomodation', $uploadDir, $_POST['existing_approv_order_accomodation']);
+    $tariff_res = handle_upload_edit('tariff', $uploadDir, $_POST['existing_tariff']);
+    $facilitation_res = handle_upload_edit('facilitation', $uploadDir, $_POST['existing_facilitation']);
+
     try {
         $stmt = $pdo->prepare(
             "UPDATE hospitals SET 
@@ -42,9 +103,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_POST['reg_valid_upto'],
             $_POST['remarks_en'],
             $_POST['remarks_hi'],
-            $_POST['approv_order_accomodation'],
-            $_POST['tariff'],
-            $_POST['facilitation'],
+            $approv_order_res['path'],
+            $tariff_res['path'],
+            $facilitation_res['path'],
             $hospitalId
         ]);
 
@@ -53,10 +114,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     } catch (PDOException $e) {
         $_SESSION['error'] = 'Error updating hospital';
+        if (isset($approv_order_res['error'])) $_SESSION['error'] .= '<br>' . $approv_order_res['error'];
+        if (isset($tariff_res['error'])) $_SESSION['error'] .= '<br>' . $tariff_res['error'];
+        if (isset($facilitation_res['error'])) $_SESSION['error'] .= '<br>' . $facilitation_res['error'];
+        error_log("Update hospital error: " . $e->getMessage());
     }
 }
 
-// Get hospital data
+
 $stmt = $pdo->prepare("SELECT * FROM hospitals WHERE id = ?");
 $stmt->execute([$hospitalId]);
 $hospital = $stmt->fetch();
@@ -65,6 +130,9 @@ if (!$hospital) {
     header('Location: index.php');
     exit;
 }
+
+$states_stmt = $pdo->query("SELECT loc_name AS name FROM emp_hosp_loc ORDER BY loc_name ASC");
+$states = $states_stmt->fetchAll(PDO::FETCH_COLUMN);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -161,6 +229,10 @@ if (!$hospital) {
 </head>
 <body>
     <div class="container animate__animated animate__fadeIn">
+        <img src="logo.jpeg" alt="NHPC Logo" class="header-image" style=" width: 100%;
+            max-height: 150px;
+            object-fit:contain;
+            margin-bottom: 2rem;">
         <h1>Edit Hospital Details</h1>
 
         <?php if (isset($_SESSION['error'])): ?>
@@ -174,21 +246,13 @@ if (!$hospital) {
 
         <form action="edit_hospital.php?id=<?php echo $hospitalId; ?>" method="post" class="needs-validation" novalidate>
             <div class="row mb-4">
-                <div class="col-md-4">
-                    <label class="form-label">Payment Scheme</label>
-                    <select name="payment_scheme" class="form-control" required>
-                        <option value="">Select Scheme</option>
-                        <option value="Direct" <?php if ($hospital['payment_scheme'] === 'Direct') echo 'selected'; ?>>Direct Payment Scheme</option>
-                        <option value="Non-Direct" <?php if ($hospital['payment_scheme'] === 'Non-Direct') echo 'selected'; ?>>Non-Direct Payment Scheme</option>
-                    </select>
-                </div>
                 <div class="col-md-6">
                     <label class="form-label">Name (English)</label>
                     <input type="text" name="name_en" class="form-control" value="<?php echo htmlspecialchars($hospital['name_en']); ?>" required>
                 </div>
                 <div class="col-md-6">
                     <label class="form-label">Name (Hindi)</label>
-                    <input type="text" name="name_hi" class="form-control" value="<?php echo htmlspecialchars($hospital['name_hi']); ?>">
+                    <input type="text" name="name_hi" class="form-control" value="<?php echo htmlspecialchars($hospital['name_hi']); ?>" required>
                 </div>
             </div>
 
@@ -204,26 +268,33 @@ if (!$hospital) {
             </div>
 
             <div class="row mb-4">
-                <div class="col-md-4">
+                <div class="col-md-6">
                     <label class="form-label">State</label>
                     <select name="state" class="form-control" required>
                         <option value="">Select State</option>
-                        <?php
-                        $states = ["Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh", "Goa", "Gujarat", "Haryana", "Himachal Pradesh", "Jharkhand", "Karnataka", "Kerala", "Madhya Pradesh", "Maharashtra", "Manipur", "Meghalaya", "Mizoram", "Nagaland", "Odisha", "Punjab", "Rajasthan", "Sikkim", "Tamil Nadu", "Telangana", "Tripura", "Uttar Pradesh", "Uttarakhand", "West Bengal", "Andaman and Nicobar Islands", "Chandigarh", "Dadra and Nagar Haveli and Daman and Diu", "Delhi", "Jammu and Kashmir", "Ladakh", "Lakshadweep", "Puducherry"];
-                        foreach ($states as $state) {
-                            $selected = ($hospital['state'] === $state) ? 'selected' : '';
-                            echo "<option value=\"$state\" $selected>$state</option>";
-                        }
-                        ?>
+                        <?php foreach ($states as $state): ?>
+                            <option value="<?php echo htmlspecialchars($state); ?>" <?php if ($hospital['state'] === $state) echo 'selected'; ?>><?php echo htmlspecialchars($state); ?></option>
+                        <?php endforeach; ?>
                     </select>
                 </div>
-                <div class="col-md-4">
-                    <label class="form-label">Contact Person</label>
-                    <input type="text" name="contact_person" class="form-control" value="<?php echo htmlspecialchars($hospital['contact_person']); ?>">
+                <div class="col-md-6">
+                    <label class="form-label">Payment Scheme</label>
+                    <select name="payment_scheme" class="form-control" required>
+                        <option value="">Select Scheme</option>
+                        <option value="Direct" <?php if ($hospital['payment_scheme'] === 'Direct') echo 'selected'; ?>>Direct Payment Scheme</option>
+                        <option value="Non-Direct" <?php if ($hospital['payment_scheme'] === 'Non-Direct') echo 'selected'; ?>>Non-Direct Payment Scheme</option>
+                    </select>
                 </div>
-                <div class="col-md-4">
+            </div>
+
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <label class="form-label">Contact Person</label>
+                    <input type="text" name="contact_person" class="form-control" value="<?php echo htmlspecialchars($hospital['contact_person']); ?>" required>
+                </div>
+                <div class="col-md-6">
                     <label class="form-label">Contact Number</label>
-                    <input type="text" name="contact_number" class="form-control" value="<?php echo htmlspecialchars($hospital['contact_number']); ?>">
+                    <input type="text" name="contact_number" class="form-control" value="<?php echo htmlspecialchars($hospital['contact_number']); ?>" required>
                 </div>
             </div>
 
@@ -255,18 +326,32 @@ if (!$hospital) {
 
             <div class="row mb-4">
                 <div class="col-md-6">
-                    <label class="form-label">Approval Order/Accommodation</label>
-                    <input type="text" name="approv_order_accomodation" class="form-control" value="<?php echo htmlspecialchars($hospital['approv_order_accomodation']); ?>">
+                    <label class="form-label">New Approval Order/Accommodation Document</label>
+                    <input type="file" name="approv_order_accomodation" class="form-control" accept=".pdf,.jpg,.jpeg,.png">
+                    <input type="hidden" name="existing_approv_order_accomodation" value="<?php echo htmlspecialchars((string)$hospital['approv_order_accomodation']); ?>">
+                    <?php if (!empty($hospital['approv_order_accomodation'])): ?>
+                        <div class="form-text mt-2">Current: <a href="<?php echo htmlspecialchars($hospital['approv_order_accomodation']); ?>" target="_blank">View Document</a></div>
+                    <?php endif; ?>
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label">Tariff</label>
-                    <input type="text" name="tariff" class="form-control" value="<?php echo htmlspecialchars($hospital['tariff']); ?>">
+                    <label class="form-label">New Tariff Document</label>
+                    <input type="file" name="tariff" class="form-control" accept=".pdf,.jpg,.jpeg,.png">
+                    <input type="hidden" name="existing_tariff" value="<?php echo htmlspecialchars((string)$hospital['tariff']); ?>">
+                    <?php if (!empty($hospital['tariff'])): ?>
+                        <div class="form-text mt-2">Current: <a href="<?php echo htmlspecialchars($hospital['tariff']); ?>" target="_blank">View Document</a></div>
+                    <?php endif; ?>
                 </div>
             </div>
 
-            <div class="mb-4">
-                <label class="form-label">Facilitation</label>
-                <textarea name="facilitation" class="form-control" rows="2"><?php echo htmlspecialchars($hospital['facilitation']); ?></textarea>
+            <div class="row mb-4">
+                <div class="col-md-12">
+                    <label class="form-label">New Facilitation Document</label>
+                    <input type="file" name="facilitation" class="form-control" accept=".pdf,.jpg,.jpeg,.png">
+                    <input type="hidden" name="existing_facilitation" value="<?php echo htmlspecialchars((string)$hospital['facilitation']); ?>">
+                    <?php if (!empty($hospital['facilitation'])): ?>
+                        <div class="form-text mt-2">Current: <a href="<?php echo htmlspecialchars($hospital['facilitation']); ?>" target="_blank">View Document</a></div>
+                    <?php endif; ?>
+                </div>
             </div>
 
             <div class="d-flex justify-content-between">

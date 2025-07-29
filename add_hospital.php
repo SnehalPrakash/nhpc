@@ -1,3 +1,21 @@
+<?php
+require 'check_session.php';
+require 'db.php';
+
+if (!can_edit()) {
+    $_SESSION['error'] = 'You do not have permission to add hospitals.';
+    header('Location: index.php');
+    exit;
+}
+
+// Generate CSRF token
+$_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+$csrf_token = $_SESSION['csrf_token'];
+
+// Fetch all unique states for the dropdown
+$states_stmt = $pdo->query("SELECT loc_name AS name FROM emp_hosp_loc ORDER BY loc_name ASC");
+$states = $states_stmt->fetchAll(PDO::FETCH_COLUMN);
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -6,22 +24,25 @@
     <title>Add Hospital</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --primary-color: #4a90e2;
+            --primary-color: #1a4b84;
             --secondary-color: #2c3e50;
             --accent-color: #16a085;
-            --background-color: #f8f9fa;
-            --text-color: #2c3e50;
-            --border-radius: 12px;
+            --border-radius: 8px;
+            --vintage-shadow: 0 8px 30px rgba(26, 75, 132, 0.12);
+            --gradient-primary: linear-gradient(135deg, #1a4b84, #2c5282);
+            --gradient-secondary: linear-gradient(to right, #f8fafc, #fff);
         }
         
         body {
-            background: var(--background-color);
+            background: var(--gradient-secondary);
             font-family: 'Roboto', Arial, sans-serif;
-            color: var(--text-color);
+            color: var(--secondary-color);
             line-height: 1.6;
+            padding: 2rem;
         }
         
         .header-image {
@@ -32,14 +53,25 @@
         }
 
         .container {
-            max-width: 800px;
+            max-width: 1200px;
             background: #fff;
             border-radius: var(--border-radius);
-            box-shadow: 0 8px 30px rgba(0,0,0,0.08);
+            box-shadow: var(--vintage-shadow);
             padding: 2.5rem;
             margin-top: 2rem;
             margin-bottom: 2rem;
-            animation: fadeIn 0.6s ease-in-out;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 8px;
+            background: var(--gradient-primary);
         }
         
         h2 {
@@ -47,28 +79,24 @@
             color: var(--primary-color);
             text-align: center;
             margin-bottom: 2rem;
-            font-size: 2rem;
-            text-transform: uppercase;
-            letter-spacing: 1px;
         }
         
         label {
             font-weight: 500;
             color: var(--secondary-color);
             margin-bottom: 0.5rem;
-            font-size: 0.95rem;
         }
         
         .form-control {
             border-radius: var(--border-radius);
             padding: 0.8rem;
-            border: 1px solid #e2e8f0;
+            border: 1px solid rgba(26, 75, 132, 0.2);
             transition: all 0.3s ease;
         }
         
         .form-control:focus {
             border-color: var(--primary-color);
-            box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
+            box-shadow: var(--vintage-shadow);
         }
         
         .btn {
@@ -77,33 +105,26 @@
             padding: 0.8rem 2rem;
             border-radius: var(--border-radius);
             transition: all 0.3s ease;
-            text-transform: uppercase;
-            font-size: 0.9rem;
         }
         
         .btn-primary {
-            background-color: var(--primary-color);
+            background: var(--gradient-primary);
             border: none;
         }
         
         .btn-primary:hover {
-            background-color: #357abd;
             transform: translateY(-2px);
-            box-shadow: 0 4px 15px rgba(74, 144, 226, 0.2);
+            box-shadow: var(--vintage-shadow);
         }
         
         .btn-secondary {
-            background-color: var(--secondary-color);
+            background-color: #6c757d;
             border: none;
         }
         
         .btn-secondary:hover {
-            background-color: #1a252f;
+            background-color: #5a6268;
             transform: translateY(-2px);
-        }
-        
-        .row {
-            margin-bottom: 1.5rem;
         }
         
         @media (max-width: 768px) {
@@ -115,23 +136,37 @@
             h2 {
                 font-size: 1.5rem;
             }
-            
-            .btn {
-                padding: 0.6rem 1.5rem;
-                font-size: 0.8rem;
-            }
-            
-            .form-control {
-                padding: 0.6rem;
-            }
         }
     </style>
 </head>
 <body>
 <div class="container">
-    <img src="certify.jpeg" alt="NHPC Logo" class="header-image">
+    <img src="logo.jpeg" alt="NHPC Logo" class="header-image">
     <h2 class="animate__animated animate__fadeInDown">Add Hospital Details</h2>
+
+    <?php if (isset($_SESSION['error'])): ?>
+        <div class="alert alert-danger">
+            <?php
+            echo htmlspecialchars($_SESSION['error']);
+            unset($_SESSION['error']);
+            ?>
+        </div>
+    <?php endif; ?>
+
+    <?php if (isset($_SESSION['errors']) && !empty($_SESSION['errors'])): ?>
+        <div class="alert alert-danger">
+            <strong>Please correct the following errors:</strong>
+            <ul>
+                <?php foreach ($_SESSION['errors'] as $error): ?>
+                    <li><?php echo htmlspecialchars($error); ?></li>
+                <?php endforeach; ?>
+            </ul>
+        </div>
+        <?php unset($_SESSION['errors']); ?>
+    <?php endif; ?>
+
     <form action="save_hospital.php" method="post" enctype="multipart/form-data" class="animate__animated animate__fadeIn animate__delay-1s needs-validation" novalidate>
+        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
         <div class="row mb-4">
             <div class="col-md-6 mb-3">
                 <label class="form-label">Name (English) <span class="text-danger">*</span></label>
@@ -163,13 +198,9 @@
                 <label class="form-label">State <span class="text-danger">*</span></label>
                 <select name="state" class="form-control" required>
                     <option value="">Select State</option>
-                    <?php
-                    require 'db.php';
-                    $stmt = $pdo->query("SELECT name FROM states ORDER BY name");
-                    while ($row = $stmt->fetch()) {
-                        echo '<option value="' . htmlspecialchars($row['name']) . '">' . htmlspecialchars($row['name']) . '</option>';
-                    }
-                    ?>
+                    <?php foreach ($states as $state): ?>
+                        <option value="<?php echo htmlspecialchars($state); ?>"><?php echo htmlspecialchars($state); ?></option>
+                    <?php endforeach; ?>
                 </select>
             </div>
             <div class="col-md-6 mb-3">
@@ -225,21 +256,21 @@
 
         <div class="row mb-4">
             <div class="col-md-6 mb-3">
-                <label class="form-label">Approval Order/Accommodation</label>
-                <input type="text" name="approv_order_accomodation" class="form-control" placeholder="Enter approval order details">
-                <div class="form-text text-muted">Enter the approval order number or accommodation details</div>
+                <label class="form-label">Approval Order/Accommodation Document</label>
+                <input type="file" name="approv_order_accomodation" class="form-control" accept=".pdf,.jpg,.jpeg,.png">
+                <div class="form-text text-muted">Upload the approval order document (PDF, JPG, PNG)</div>
             </div>
             <div class="col-md-6 mb-3">
-                <label class="form-label">Tariff</label>
-                <input type="text" name="tariff" class="form-control" placeholder="Enter tariff details">
-                <div class="form-text text-muted">Specify the tariff structure or rates</div>
+                <label class="form-label">Tariff Document</label>
+                <input type="file" name="tariff" class="form-control" accept=".pdf,.jpg,.jpeg,.png">
+                <div class="form-text text-muted">Upload the tariff document (PDF, JPG, PNG)</div>
             </div>
         </div>
 
         <div class="mb-4">
-            <label class="form-label">Facilitation</label>
-            <textarea name="facilitation" class="form-control" placeholder="Enter facilitation details" rows="2"></textarea>
-            <div class="form-text text-muted">Describe the facilities and services available</div>
+            <label class="form-label">Facilitation Document</label>
+            <input type="file" name="facilitation" class="form-control" accept=".pdf,.jpg,.jpeg,.png">
+            <div class="form-text text-muted">Upload the facilitation document (PDF, JPG, PNG)</div>
         </div>
 
         <div class="d-flex justify-content-center gap-3 mt-4">
@@ -253,7 +284,6 @@
     </form>
 </div>
 
-<script src="https://kit.fontawesome.com/a076d05399.js" crossorigin="anonymous"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const form = document.querySelector('form');

@@ -1,18 +1,18 @@
 <?php
-session_start();
+session_start(); // Start session 
 
-// Check if user is logged in
+// Redirect to login page if !admin or logged in
 if (!isset($_SESSION['user_id'])) {
     header('Location: login.php');
     exit;
 }
 
-// Function to check if user has admin privileges
+// Returns true if the current user is an admin
 function is_admin() {
     return isset($_SESSION['role']) && $_SESSION['role'] === 'admin';
 }
 
-// Function to check if user has edit permissions
+// Returns true if the user can edit hospital data (admin or user)
 function can_edit() {
     return isset($_SESSION['role']) && ($_SESSION['role'] === 'admin' || $_SESSION['role'] === 'user');
 }
