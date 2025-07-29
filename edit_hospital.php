@@ -9,7 +9,19 @@ if (!can_edit()) {
 
 $hospitalId = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 
+// Generate a new CSRF token for the form
+$_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+$csrf_token = $_SESSION['csrf_token'];
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+
+    // 1. Verify CSRF token
+    if (!isset($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
+        $_SESSION['error'] = 'Invalid request. Please try again.';
+        header('Location: edit_hospital.php?id=' . $hospitalId);
+        exit;
+    }
+    unset($_SESSION['csrf_token']);
 
     $uploadDir = 'emp_hospital/HospRateList/';
     if (!is_dir($uploadDir)) {
@@ -39,7 +51,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     {
         if (isset($_FILES[$fileKey]) && $_FILES[$fileKey]['error'] === UPLOAD_ERR_OK) {
             if ($_FILES[$fileKey]['size'] > 10000000) { // 10MB limit
-                return ['error' => 'File ' . htmlspecialchars($fileKey) . ' is too large.'];
+                return ['error' => 'File ' . htmlspecialchars($fileKey) . ' is too large. Max 10MB.'];
             }
 
             $allowed_types = ['application/pdf', 'image/jpeg', 'image/png'];
@@ -47,7 +59,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $mime_type = $finfo->file($_FILES[$fileKey]['tmp_name']);
 
             if (!in_array($mime_type, $allowed_types)) {
-                return ['error' => 'Invalid file type for ' . htmlspecialchars($fileKey) . '.'];
+                return ['error' => 'Invalid file type for ' . htmlspecialchars($fileKey) . '. Only PDF, JPG, PNG are allowed.'];
             }
 
             $filename = uniqid() . '_' . basename(htmlspecialchars($_FILES[$fileKey]['name']));
@@ -60,7 +72,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 return ['path' => $target_path];
             } else {
-                return ['error' => 'Failed to move uploaded file for ' . htmlspecialchars($fileKey) . '.'];
+                return ['error' => 'Failed to move uploaded file for ' . htmlspecialchars($fileKey) . '. Check server logs.'];
             }
         }
 
@@ -71,37 +83,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $tariff_res = handle_upload_edit('tariff', $uploadDir, $_POST['existing_tariff']);
     $facilitation_res = handle_upload_edit('facilitation', $uploadDir, $_POST['existing_facilitation']);
 
+    $errors = [];
+    if (isset($approv_order_res['error'])) $errors[] = $approv_order_res['error'];
+    if (isset($tariff_res['error'])) $errors[] = $tariff_res['error'];
+    if (isset($facilitation_res['error'])) $errors[] = $facilitation_res['error'];
+
+    if (!empty($errors)) {
+        $_SESSION['error'] = implode('<br>', $errors);
+        header('Location: edit_hospital.php?id=' . $hospitalId);
+        exit;
+    }
     try {
         $stmt = $pdo->prepare(
-            "UPDATE hospitals SET 
-            name_en = ?, name_hi = ?, 
-            address_en = ?, address_hi = ?, 
+            "UPDATE emp_hosp_name SET 
+            Hosp_name = ?, Hosp_name_H = ?, 
+            hosp_add = ?, hosp_add_H = ?, 
             state = ?,
-            payment_scheme = ?,
-            contact_person = ?,
-            contact_number = ?,
-            valid_from = ?, valid_upto = ?, 
-            reg_valid_upto = ?, 
-            remarks_en = ?, remarks_hi = ?, 
-            approv_order_accomodation = ?, 
-            tariff = ?, 
-            facilitation = ? 
-            WHERE id = ?"
+            SCHEME = ?,
+            hospital_contact_person = ?,
+            hospital_contact_number = ?,
+            valid_from = ?, VALID_UPTO = ?, 
+            RegValidUptoDt = ?, 
+            Rem = ?, remarks_hi = ?, 
+            ACC_Link_Add = ?, 
+            LINK_ADD = ?, 
+            Hosp_Offer = ? 
+            WHERE hosp_id = ?"
         );
 
         $stmt->execute([
-            $_POST['name_en'],
-            $_POST['name_hi'],
-            $_POST['address_en'],
-            $_POST['address_hi'],
+            $_POST['Hosp_name'],
+            $_POST['Hosp_name_H'],
+            $_POST['hosp_add'],
+            $_POST['hosp_add_H'],
             $_POST['state'],
-            $_POST['payment_scheme'],
-            $_POST['contact_person'],
-            $_POST['contact_number'],
-            $_POST['valid_from'],
-            $_POST['valid_upto'],
-            $_POST['reg_valid_upto'],
-            $_POST['remarks_en'],
+            $_POST['SCHEME'],
+            $_POST['hospital_contact_person'],
+            $_POST['hospital_contact_number'],
+            !empty($_POST['valid_from']) ? $_POST['valid_from'] : null,
+            !empty($_POST['VALID_UPTO']) ? $_POST['VALID_UPTO'] : null,
+            !empty($_POST['RegValidUptoDt']) ? $_POST['RegValidUptoDt'] : null,
+            $_POST['Rem'],
             $_POST['remarks_hi'],
             $approv_order_res['path'],
             $tariff_res['path'],
@@ -113,16 +135,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         header('Location: index.php');
         exit;
     } catch (PDOException $e) {
-        $_SESSION['error'] = 'Error updating hospital';
-        if (isset($approv_order_res['error'])) $_SESSION['error'] .= '<br>' . $approv_order_res['error'];
-        if (isset($tariff_res['error'])) $_SESSION['error'] .= '<br>' . $tariff_res['error'];
-        if (isset($facilitation_res['error'])) $_SESSION['error'] .= '<br>' . $facilitation_res['error'];
+        $_SESSION['error'] = 'Database error: Could not update hospital.';
         error_log("Update hospital error: " . $e->getMessage());
+        header('Location: edit_hospital.php?id=' . $hospitalId);
+        exit;
     }
 }
 
 
-$stmt = $pdo->prepare("SELECT * FROM hospitals WHERE id = ?");
+$stmt = $pdo->prepare("SELECT * FROM emp_hosp_name WHERE hosp_id = ?");
 $stmt->execute([$hospitalId]);
 $hospital = $stmt->fetch();
 
@@ -131,7 +152,8 @@ if (!$hospital) {
     exit;
 }
 
-$states_stmt = $pdo->query("SELECT loc_name AS name FROM emp_hosp_loc ORDER BY loc_name ASC");
+
+$states_stmt = $pdo->query("SELECT loc_name AS name FROM emp_hosp_loc ORDER BY name");
 $states = $states_stmt->fetchAll(PDO::FETCH_COLUMN);
 ?>
 <!DOCTYPE html>
@@ -244,26 +266,27 @@ $states = $states_stmt->fetchAll(PDO::FETCH_COLUMN);
             </div>
         <?php endif; ?>
 
-        <form action="edit_hospital.php?id=<?php echo $hospitalId; ?>" method="post" class="needs-validation" novalidate>
+        <form action="edit_hospital.php?id=<?php echo $hospitalId; ?>" method="post" enctype="multipart/form-data" class="needs-validation" novalidate>
+            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
             <div class="row mb-4">
                 <div class="col-md-6">
                     <label class="form-label">Name (English)</label>
-                    <input type="text" name="name_en" class="form-control" value="<?php echo htmlspecialchars($hospital['name_en']); ?>" required>
+                    <input type="text" name="Hosp_name" class="form-control" value="<?php echo htmlspecialchars($hospital['Hosp_name']); ?>" required>
                 </div>
                 <div class="col-md-6">
                     <label class="form-label">Name (Hindi)</label>
-                    <input type="text" name="name_hi" class="form-control" value="<?php echo htmlspecialchars($hospital['name_hi']); ?>" required>
+                    <input type="text" name="Hosp_name_H" class="form-control" value="<?php echo htmlspecialchars($hospital['Hosp_name_H']); ?>" required>
                 </div>
             </div>
 
             <div class="row mb-4">
                 <div class="col-md-6">
                     <label class="form-label">Address (English)</label>
-                    <textarea name="address_en" class="form-control" required rows="3"><?php echo htmlspecialchars($hospital['address_en']); ?></textarea>
+                    <textarea name="hosp_add" class="form-control" required rows="3"><?php echo htmlspecialchars($hospital['hosp_add']); ?></textarea>
                 </div>
                 <div class="col-md-6">
                     <label class="form-label">Address (Hindi)</label>
-                    <textarea name="address_hi" class="form-control" rows="3"><?php echo htmlspecialchars($hospital['address_hi']); ?></textarea>
+                    <textarea name="hosp_add_H" class="form-control" rows="3"><?php echo htmlspecialchars($hospital['hosp_add_H']); ?></textarea>
                 </div>
             </div>
 
@@ -273,16 +296,16 @@ $states = $states_stmt->fetchAll(PDO::FETCH_COLUMN);
                     <select name="state" class="form-control" required>
                         <option value="">Select State</option>
                         <?php foreach ($states as $state): ?>
-                            <option value="<?php echo htmlspecialchars($state); ?>" <?php if ($hospital['state'] === $state) echo 'selected'; ?>><?php echo htmlspecialchars($state); ?></option>
+                            <option value="<?php echo htmlspecialchars($state); ?>" <?php if ($hospital['state'] == $state) echo 'selected'; ?>><?php echo htmlspecialchars($state); ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
                 <div class="col-md-6">
                     <label class="form-label">Payment Scheme</label>
-                    <select name="payment_scheme" class="form-control" required>
+                    <select name="SCHEME" class="form-control" required>
                         <option value="">Select Scheme</option>
-                        <option value="Direct" <?php if ($hospital['payment_scheme'] === 'Direct') echo 'selected'; ?>>Direct Payment Scheme</option>
-                        <option value="Non-Direct" <?php if ($hospital['payment_scheme'] === 'Non-Direct') echo 'selected'; ?>>Non-Direct Payment Scheme</option>
+                        <option value="Direct" <?php if ($hospital['SCHEME'] == 'Direct') echo 'selected'; ?>>Direct Payment Scheme</option>
+                        <option value="Non-Direct" <?php if ($hospital['SCHEME'] == 'Non-Direct') echo 'selected'; ?>>Non-Direct Payment Scheme</option>
                     </select>
                 </div>
             </div>
@@ -290,11 +313,11 @@ $states = $states_stmt->fetchAll(PDO::FETCH_COLUMN);
             <div class="row mb-4">
                 <div class="col-md-6">
                     <label class="form-label">Contact Person</label>
-                    <input type="text" name="contact_person" class="form-control" value="<?php echo htmlspecialchars($hospital['contact_person']); ?>" required>
+                    <input type="text" name="hospital_contact_person" class="form-control" value="<?php echo htmlspecialchars($hospital['hospital_contact_person']); ?>" required>
                 </div>
                 <div class="col-md-6">
                     <label class="form-label">Contact Number</label>
-                    <input type="text" name="contact_number" class="form-control" value="<?php echo htmlspecialchars($hospital['contact_number']); ?>" required>
+                    <input type="text" name="hospital_contact_number" class="form-control" value="<?php echo htmlspecialchars($hospital['hospital_contact_number']); ?>" required>
                 </div>
             </div>
 
@@ -305,18 +328,18 @@ $states = $states_stmt->fetchAll(PDO::FETCH_COLUMN);
                 </div>
                 <div class="col-md-4">
                     <label class="form-label">Valid Upto</label>
-                    <input type="date" name="valid_upto" class="form-control" value="<?php echo htmlspecialchars($hospital['valid_upto']); ?>">
+                    <input type="date" name="VALID_UPTO" class="form-control" value="<?php echo htmlspecialchars($hospital['VALID_UPTO']); ?>">
                 </div>
                 <div class="col-md-4">
                     <label class="form-label">Reg Valid Upto</label>
-                    <input type="date" name="reg_valid_upto" class="form-control" value="<?php echo htmlspecialchars($hospital['reg_valid_upto']); ?>">
+                    <input type="date" name="RegValidUptoDt" class="form-control" value="<?php echo htmlspecialchars($hospital['RegValidUptoDt']); ?>">
                 </div>
             </div>
 
             <div class="row mb-4">
                 <div class="col-md-6">
                     <label class="form-label">Remarks (English)</label>
-                    <textarea name="remarks_en" class="form-control" rows="2"><?php echo htmlspecialchars($hospital['remarks_en']); ?></textarea>
+                    <textarea name="Rem" class="form-control" rows="2"><?php echo htmlspecialchars($hospital['Rem']); ?></textarea>
                 </div>
                 <div class="col-md-6">
                     <label class="form-label">Remarks (Hindi)</label>
@@ -328,17 +351,17 @@ $states = $states_stmt->fetchAll(PDO::FETCH_COLUMN);
                 <div class="col-md-6">
                     <label class="form-label">New Approval Order/Accommodation Document</label>
                     <input type="file" name="approv_order_accomodation" class="form-control" accept=".pdf,.jpg,.jpeg,.png">
-                    <input type="hidden" name="existing_approv_order_accomodation" value="<?php echo htmlspecialchars((string)$hospital['approv_order_accomodation']); ?>">
-                    <?php if (!empty($hospital['approv_order_accomodation'])): ?>
-                        <div class="form-text mt-2">Current: <a href="<?php echo htmlspecialchars($hospital['approv_order_accomodation']); ?>" target="_blank">View Document</a></div>
+                    <input type="hidden" name="existing_approv_order_accomodation" value="<?php echo htmlspecialchars((string)$hospital['ACC_Link_Add']); ?>">
+                    <?php if (!empty($hospital['ACC_Link_Add'])): ?>
+                        <div class="form-text mt-2">Current: <a href="<?php echo htmlspecialchars($hospital['ACC_Link_Add']); ?>" target="_blank">View Document</a></div>
                     <?php endif; ?>
                 </div>
                 <div class="col-md-6">
                     <label class="form-label">New Tariff Document</label>
                     <input type="file" name="tariff" class="form-control" accept=".pdf,.jpg,.jpeg,.png">
-                    <input type="hidden" name="existing_tariff" value="<?php echo htmlspecialchars((string)$hospital['tariff']); ?>">
-                    <?php if (!empty($hospital['tariff'])): ?>
-                        <div class="form-text mt-2">Current: <a href="<?php echo htmlspecialchars($hospital['tariff']); ?>" target="_blank">View Document</a></div>
+                    <input type="hidden" name="existing_tariff" value="<?php echo htmlspecialchars((string)$hospital['LINK_ADD']); ?>">
+                    <?php if (!empty($hospital['LINK_ADD'])): ?>
+                        <div class="form-text mt-2">Current: <a href="<?php echo htmlspecialchars($hospital['LINK_ADD']); ?>" target="_blank">View Document</a></div>
                     <?php endif; ?>
                 </div>
             </div>
@@ -347,9 +370,9 @@ $states = $states_stmt->fetchAll(PDO::FETCH_COLUMN);
                 <div class="col-md-12">
                     <label class="form-label">New Facilitation Document</label>
                     <input type="file" name="facilitation" class="form-control" accept=".pdf,.jpg,.jpeg,.png">
-                    <input type="hidden" name="existing_facilitation" value="<?php echo htmlspecialchars((string)$hospital['facilitation']); ?>">
-                    <?php if (!empty($hospital['facilitation'])): ?>
-                        <div class="form-text mt-2">Current: <a href="<?php echo htmlspecialchars($hospital['facilitation']); ?>" target="_blank">View Document</a></div>
+                    <input type="hidden" name="existing_facilitation" value="<?php echo htmlspecialchars((string)$hospital['Hosp_Offer']); ?>">
+                    <?php if (!empty($hospital['Hosp_Offer'])): ?>
+                        <div class="form-text mt-2">Current: <a href="<?php echo htmlspecialchars($hospital['Hosp_Offer']); ?>" target="_blank">View Document</a></div>
                     <?php endif; ?>
                 </div>
             </div>
@@ -370,19 +393,24 @@ $states = $states_stmt->fetchAll(PDO::FETCH_COLUMN);
         document.addEventListener('DOMContentLoaded', function() {
             const form = document.querySelector('form');
             const validFrom = document.querySelector('input[name="valid_from"]');
-            const validUpto = document.querySelector('input[name="valid_upto"]');
+            const validUpto = document.querySelector('input[name="VALID_UPTO"]');
+
+            function validateDates() {
+                if (validFrom.value && validUpto.value && validFrom.value > validUpto.value) {
+                    validUpto.setCustomValidity('Valid Upto date must be after Valid From date.');
+                } else {
+                    validUpto.setCustomValidity('');
+                }
+            }
+
+            validFrom.addEventListener('change', validateDates);
+            validUpto.addEventListener('change', validateDates);
 
             form.addEventListener('submit', function(event) {
                 if (!form.checkValidity()) {
                     event.preventDefault();
                     event.stopPropagation();
                 }
-
-                if (validFrom.value && validUpto.value && validFrom.value > validUpto.value) {
-                    event.preventDefault();
-                    alert('Valid Upto date must be after Valid From date');
-                }
-
                 form.classList.add('was-validated');
             }, false);
         });

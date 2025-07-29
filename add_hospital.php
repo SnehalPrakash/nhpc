@@ -13,7 +13,7 @@ $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 $csrf_token = $_SESSION['csrf_token'];
 
 // Fetch all unique states for the dropdown
-$states_stmt = $pdo->query("SELECT loc_name AS name FROM emp_hosp_loc ORDER BY loc_name ASC");
+$states_stmt = $pdo->query("SELECT loc_name AS name FROM emp_hosp_loc ORDER BY name ASC");
 $states = $states_stmt->fetchAll(PDO::FETCH_COLUMN);
 ?>
 <!DOCTYPE html>
@@ -170,12 +170,12 @@ $states = $states_stmt->fetchAll(PDO::FETCH_COLUMN);
         <div class="row mb-4">
             <div class="col-md-6 mb-3">
                 <label class="form-label">Name (English) <span class="text-danger">*</span></label>
-                <input type="text" name="name_en" class="form-control" required placeholder="Enter hospital name in English">
+                <input type="text" name="Hosp_name" class="form-control" required placeholder="Enter hospital name in English">
                 <div class="form-text text-muted">This field is required</div>
             </div>
             <div class="col-md-6 mb-3">
                 <label class="form-label">Name (Hindi) <span class="text-danger">*</span></label>
-                <input type="text" name="name_hi" class="form-control" required placeholder="Enter hospital name in Hindi">
+                <input type="text" name="Hosp_name_H" class="form-control" required placeholder="Enter hospital name in Hindi">
                 <div class="form-text text-muted">This field is required</div>
             </div>
         </div>
@@ -183,12 +183,12 @@ $states = $states_stmt->fetchAll(PDO::FETCH_COLUMN);
         <div class="row mb-4">
             <div class="col-md-6 mb-3">
                 <label class="form-label">Address (English) <span class="text-danger">*</span></label>
-                <textarea name="address_en" class="form-control" required placeholder="Enter complete address in English" rows="3"></textarea>
+                <textarea name="hosp_add" class="form-control" required placeholder="Enter complete address in English" rows="3"></textarea>
                 <div class="form-text text-muted">Please provide the full address</div>
             </div>
             <div class="col-md-6 mb-3">
                 <label class="form-label">Address (Hindi) <span class="text-danger">*</span></label>
-                <textarea name="address_hi" class="form-control" required placeholder="Enter complete address in Hindi" rows="3"></textarea>
+                <textarea name="hosp_add_H" class="form-control" required placeholder="Enter complete address in Hindi" rows="3"></textarea>
                 <div class="form-text text-muted">Please provide the full address</div>
             </div>
         </div>
@@ -205,7 +205,7 @@ $states = $states_stmt->fetchAll(PDO::FETCH_COLUMN);
             </div>
             <div class="col-md-6 mb-3">
                 <label class="form-label">Payment Scheme <span class="text-danger">*</span></label>
-                <select name="payment_scheme" class="form-control" required>
+                <select name="SCHEME" class="form-control" required>
                     <option value="">Select Payment Scheme</option>
                     <option value="Direct">Direct Payment Scheme</option>
                     <option value="Non-Direct">Non-Direct Payment Scheme</option>
@@ -216,11 +216,11 @@ $states = $states_stmt->fetchAll(PDO::FETCH_COLUMN);
         <div class="row mb-4">
             <div class="col-md-6 mb-3">
                 <label class="form-label">Contact Person <span class="text-danger">*</span></label>
-                <input type="text" name="contact_person" class="form-control" required placeholder="Enter contact person name">
+                <input type="text" name="hospital_contact_person" class="form-control" required placeholder="Enter contact person name">
             </div>
             <div class="col-md-6 mb-3">
                 <label class="form-label">Contact Number <span class="text-danger">*</span></label>
-                <input type="tel" name="contact_number" class="form-control" required pattern="[0-9]{10}" placeholder="Enter 10-digit contact number">
+                <input type="tel" name="hospital_contact_number" class="form-control" required pattern="[0-9]{10}" placeholder="Enter 10-digit contact number">
                 <div class="form-text text-muted">Enter a valid 10-digit mobile number</div>
             </div>
         </div>
@@ -233,12 +233,12 @@ $states = $states_stmt->fetchAll(PDO::FETCH_COLUMN);
             </div>
             <div class="col-md-4 mb-3">
                 <label class="form-label">Valid Upto</label>
-                <input type="date" name="valid_upto" class="form-control">
+                <input type="date" name="VALID_UPTO" class="form-control">
                 <div class="form-text text-muted">End date of validity</div>
             </div>
             <div class="col-md-4 mb-3">
                 <label class="form-label">Reg Valid Upto</label>
-                <input type="date" name="reg_valid_upto" class="form-control">
+                <input type="date" name="RegValidUptoDt" class="form-control">
                 <div class="form-text text-muted">Registration validity end date</div>
             </div>
         </div>
@@ -246,7 +246,7 @@ $states = $states_stmt->fetchAll(PDO::FETCH_COLUMN);
         <div class="row mb-4">
             <div class="col-md-6 mb-3">
                 <label class="form-label">Remarks (English)</label>
-                <textarea name="remarks_en" class="form-control" placeholder="Enter remarks in English" rows="2"></textarea>
+                <textarea name="Rem" class="form-control" placeholder="Enter remarks in English" rows="2"></textarea>
             </div>
             <div class="col-md-6 mb-3">
                 <label class="form-label">Remarks (Hindi)</label>
@@ -317,9 +317,9 @@ document.addEventListener('DOMContentLoaded', function() {
     }, false);
 
     const validFrom = document.querySelector('input[name="valid_from"]');
-    const validUpto = document.querySelector('input[name="valid_upto"]');
-    const regValidUpto = document.querySelector('input[name="reg_valid_upto"]');
-    const contactNumber = document.querySelector('input[name="contact_number"]');
+    const validUpto = document.querySelector('input[name="VALID_UPTO"]');
+    const regValidUpto = document.querySelector('input[name="RegValidUptoDt"]');
+    const contactNumber = document.querySelector('input[name="hospital_contact_number"]');
 
     validUpto.addEventListener('change', function() {
         if (validFrom.value && validUpto.value && validFrom.value > validUpto.value) {
