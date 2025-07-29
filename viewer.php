@@ -1,4 +1,6 @@
 <?php
+ini_set('display_errors', 1);
+error_reporting(E_ALL);
 require 'db.php';
 
 // Fetch all unique states for the filter dropdown from the correct table
@@ -31,8 +33,63 @@ function get_status($valid_upto) {
     }
 }
 
-// Fetch only active and expiring soon hospitals from the correct table
-$stmt = $pdo->query("SELECT * FROM hospitals WHERE valid_upto IS NULL OR valid_upto >= CURDATE() ORDER BY name_en ASC");
+// --- Server-Side Filtering Logic ---
+
+// Base SQL query with aliases for consistency
+$sql = "SELECT 
+    hosp_id AS id,
+    Hosp_name AS name_en, 
+    Hosp_name_H AS name_hi,
+    hosp_add AS address_en,
+    hosp_add_H AS address_hi,
+    VALID_UPTO AS valid_upto,
+    RegValidUptoDt AS reg_valid_upto,
+    Rem AS remarks_en,
+    remarks_hi,
+    ACC_Link_Add AS approv_order_accomodation,
+    LINK_ADD AS tariff,
+    Hosp_Offer AS facilitation,
+    SCHEME AS payment_scheme,
+    hospital_contact_person AS contact_person,
+    hospital_contact_number AS contact_number,
+    state, valid_from
+ FROM emp_hosp_name";
+
+$params = [];
+// Base condition for the public viewer page: only show active or soon-to-expire hospitals.
+$whereClauses = ["(VALID_UPTO IS NULL OR VALID_UPTO >= CURDATE())"];
+
+// Handle search term filter
+if (!empty($_GET['search'])) {
+    $searchTerm = '%' . htmlspecialchars($_GET['search']) . '%';
+    // Search across multiple relevant text fields
+    $whereClauses[] = "(Hosp_name LIKE ? OR hosp_add LIKE ? OR Hosp_name_H LIKE ? OR hosp_add_H LIKE ?)";
+    $params[] = $searchTerm;
+    $params[] = $searchTerm;
+    $params[] = $searchTerm;
+    $params[] = $searchTerm;
+}
+
+// Handle state filter (column name 'state' appears to be correct)
+if (!empty($_GET['state'])) {
+    $whereClauses[] = "state = ?";
+    $params[] = $_GET['state'];
+}
+
+// Handle payment scheme filter
+if (!empty($_GET['scheme'])) {
+    $whereClauses[] = "SCHEME = ?";
+    $params[] = $_GET['scheme'];
+}
+
+if (!empty($whereClauses)) {
+    $sql .= " WHERE " . implode(' AND ', $whereClauses);
+}
+
+$sql .= " ORDER BY Hosp_name ASC";
+
+$stmt = $pdo->prepare($sql);
+$stmt->execute($params);
 $hospitals = $stmt->fetchAll();
 ?>
 <html lang="en">
@@ -155,29 +212,29 @@ $hospitals = $stmt->fetchAll();
         </div>
     </div>
 
-    <div class="row g-3 align-items-center my-2 p-2 bg-light border rounded animate__animated animate__fadeIn">
+    <form id="filterForm" method="GET" action="viewer.php" class="row g-3 align-items-center my-2 p-2 bg-light border rounded animate__animated animate__fadeIn">
         <div class="col-md-3">
-            <input type="text" id="searchFilter" class="form-control" placeholder="Search by name or address...">
+            <input type="text" id="searchFilter" name="search" class="form-control" placeholder="Search by name or address..." value="<?php echo htmlspecialchars($_GET['search'] ?? ''); ?>">
         </div>
         <div class="col-md-3">
-            <select id="stateFilter" class="form-select">
+            <select id="stateFilter" name="state" class="form-select">
                 <option value="">All States</option>
                 <?php foreach ($states as $state): ?>
-                    <option value="<?php echo htmlspecialchars($state); ?>"><?php echo htmlspecialchars($state); ?></option>
+                    <option value="<?php echo htmlspecialchars($state); ?>" <?php if (isset($_GET['state']) && $_GET['state'] === $state) echo 'selected'; ?>><?php echo htmlspecialchars($state); ?></option>
                 <?php endforeach; ?>
             </select>
         </div>
         <div class="col-md-3">
-            <select id="paymentSchemeFilter" class="form-select">
+            <select id="paymentSchemeFilter" name="scheme" class="form-select">
                 <option value="">All Schemes</option>
-                <option value="Direct">Direct Payment</option>
-                <option value="Non-Direct">Non-Direct Payment</option>
+                <option value="Direct" <?php if (isset($_GET['scheme']) && $_GET['scheme'] === 'Direct') echo 'selected'; ?>>Direct Payment</option>
+                <option value="Non-Direct" <?php if (isset($_GET['scheme']) && $_GET['scheme'] === 'Non-Direct') echo 'selected'; ?>>Non-Direct Payment</option>
             </select>
         </div>
         <div class="col-md-3 d-grid">
-            <button id="resetFilters" class="btn btn-outline-secondary">Reset Filters</button>
+            <button type="button" id="resetFilters" class="btn btn-outline-secondary">Reset Filters</button>
         </div>
-    </div>
+    </form>
 
     <div class="table-responsive animate__animated animate__fadeInUp">
         <table class="table table-hover align-middle" id="hospitalTable">
@@ -230,7 +287,7 @@ $hospitals = $stmt->fetchAll();
                                     data-valid-upto="<?php echo htmlspecialchars($row['valid_upto'] ? date('d-M-Y', strtotime($row['valid_upto'])) : 'N/A'); ?>"
                                     data-reg-valid-upto="<?php echo htmlspecialchars($row['reg_valid_upto'] ? date('d-M-Y', strtotime($row['reg_valid_upto'])) : 'N/A'); ?>"
                                     data-remarks-en="<?php echo htmlspecialchars($row['remarks_en']); ?>"
-                                    data-remarks-hi="<?php echo htmlspecialchars($row['remarks_hi']); ?>"
+                                     data-remarks-hi="<?php echo htmlspecialchars($row['remarks_hi']); ?>"
                                     data-approv-order-doc="<?php echo htmlspecialchars($row['approv_order_accomodation']); ?>"
                                     data-tariff-doc="<?php echo htmlspecialchars($row['tariff']); ?>"
                                     data-facilitation-doc="<?php echo htmlspecialchars($row['facilitation']); ?>"
@@ -280,7 +337,7 @@ $hospitals = $stmt->fetchAll();
                 <h5><i class="fas fa-file-alt me-2"></i>Documents</h5>
                 <div id="modalDocuments" class="list-group"></div>
 
-                <h5><i class="fas fa-comment-dots me-2"></i>Remarks</h5>
+                 <h5><i class="fas fa-comment-dots me-2"></i>Remarks</h5>
                 <p id="modalRemarksEn" class="mb-1"></p>
                 <p id="modalRemarksHi" class="text-muted"></p>
             </div>
@@ -320,6 +377,7 @@ document.addEventListener('DOMContentLoaded', function() {
             setText('modalRemarksEn', 'data-remarks-en');
             setText('modalRemarksHi', 'data-remarks-hi');
 
+
             const modalDocsContainer = viewModal.querySelector('#modalDocuments');
             modalDocsContainer.innerHTML = ''; 
 
@@ -344,54 +402,39 @@ document.addEventListener('DOMContentLoaded', function() {
         row.style.animationDelay = `${index * 0.05}s`;
     });
 
+    // --- Server-Side Filtering Logic ---
+    const filterForm = document.getElementById('filterForm');
     const searchFilter = document.getElementById('searchFilter');
     const stateFilter = document.getElementById('stateFilter');
     const paymentSchemeFilter = document.getElementById('paymentSchemeFilter');
     const resetBtn = document.getElementById('resetFilters');
     const exportBtn = document.getElementById('exportCsvBtn');
 
-    function applyFilters() {
-        const searchTerm = searchFilter.value.toLowerCase();
-        const selectedState = stateFilter.value;
-        const selectedScheme = paymentSchemeFilter.value;
-
-        tableRows.forEach(row => {
-            const name = row.cells[0].textContent.toLowerCase();
-            const address = row.cells[1].textContent.toLowerCase();
-            const state = row.cells[2].textContent;
-            const scheme = row.dataset.paymentScheme;
-
-            const searchMatch = searchTerm === '' || name.includes(searchTerm) || address.includes(searchTerm);
-            const stateMatch = selectedState === '' || state === selectedState;
-            const schemeMatch = selectedScheme === '' || scheme === selectedScheme;
-
-            if (searchMatch && stateMatch && schemeMatch) {
-                row.style.display = '';
-            } else {
-                row.style.display = 'none';
-            }
-        });
-
-        // Update export link with current filters
-        const params = new URLSearchParams();
-        if (searchFilter.value) params.append('search', searchFilter.value);
-        if (stateFilter.value) params.append('state', stateFilter.value);
-        if (paymentSchemeFilter.value) params.append('scheme', paymentSchemeFilter.value);
-        exportBtn.href = `export_viewer.php?${params.toString()}`;
+    // Function to submit the form when a filter changes
+    function submitFilterForm() {
+        filterForm.submit();
     }
 
-    searchFilter.addEventListener('keyup', applyFilters);
-    stateFilter.addEventListener('change', applyFilters);
-    paymentSchemeFilter.addEventListener('change', applyFilters);
+    // Update export link to reflect the current filters from the URL
+    if (exportBtn) {
+        const urlParams = new URLSearchParams(window.location.search);
+        exportBtn.href = `export_viewer.php?${urlParams.toString()}`;
+    }
+
+    // Event listeners to trigger form submission
+    let searchTimeout;
+    searchFilter.addEventListener('keyup', () => {
+        clearTimeout(searchTimeout);
+        // Debounce search input to avoid submitting on every keystroke
+        searchTimeout = setTimeout(submitFilterForm, 500); 
+    });
+    stateFilter.addEventListener('change', submitFilterForm);
+    paymentSchemeFilter.addEventListener('change', submitFilterForm);
 
     resetBtn.addEventListener('click', () => {
-        searchFilter.value = '';
-        stateFilter.value = '';
-        paymentSchemeFilter.value = '';
-        applyFilters();
+        // Redirect to the page without any query parameters
+        window.location.href = 'viewer.php';
     });
-
-    applyFilters();
 });
 </script>
 </body>

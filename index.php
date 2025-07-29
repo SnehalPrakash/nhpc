@@ -1,14 +1,47 @@
 <?php
-require 'check_session.php'; 
-require 'db.php'; 
+require 'check_session.php';
+require 'db.php';
 
+$hospitals = [];
+$states = [];
+$db_error = null;
 
-$stmt = $pdo->query("SELECT * FROM hospitals ORDER BY name_en ASC");
-$hospitals = $stmt->fetchAll();
+try {
+    // Corrected query to fetch data from the 'hospitals' table.
+    $stmt = $pdo->query(
+        "SELECT 
+            hosp_id AS id,
+            Hosp_name AS name_en, 
+            Hosp_name_H AS name_hi,
+            hosp_add AS address_en,
+            hosp_add_H AS address_hi,
+            VALID_UPTO AS valid_upto,
+            RegValidUptoDt AS reg_valid_upto,
+            Rem AS remarks_en,
+            ACC_Link_Add AS approv_order_accomodation,
+            LINK_ADD AS tariff,
+            Hosp_Offer AS facilitation,
+            SCHEME AS payment_scheme,
+            hospital_contact_person AS contact_person,
+            hospital_contact_number AS contact_number,
+            state, valid_from, remarks_hi
+         FROM
+            emp_hosp_name
+         ORDER BY
+            Hosp_name ASC"
+    );
+    $hospitals = $stmt->fetchAll();
 
+    // This query seems correct as it fetches from a dedicated location table.
+    $states_stmt = $pdo->query("SELECT loc_name AS name FROM emp_hosp_loc ORDER BY loc_name ASC");
+    $states = $states_stmt->fetchAll(PDO::FETCH_COLUMN);
 
-$states_stmt = $pdo->query("SELECT loc_name AS name FROM emp_hosp_loc ORDER BY loc_name ASC");
-$states = $states_stmt->fetchAll(PDO::FETCH_COLUMN);
+} catch (PDOException $e) {
+    $db_error = "Database error: Could not retrieve hospital data. Please contact the administrator.";
+    // It's good practice to log the detailed error for debugging.
+    error_log("Index page DB error: " . $e->getMessage());
+}
+
 /**
  * Determines the status of the hospital based on its validity date.
  * Returns status text and a CSS class for badge color.
@@ -157,6 +190,15 @@ function get_status($valid_upto) {
 <?php require 'includes/header.php'; ?>
 
 <div class="container-main">
+    <?php if ($db_error): ?>
+        <div class="alert alert-danger mt-4">
+            <h4 class="alert-heading">Application Error</h4>
+            <p><?php echo htmlspecialchars($db_error); ?></p>
+            <hr>
+            <p class="mb-0">The application is unable to connect to the database or execute a query. Please check the server logs for more details.</p>
+        </div>
+    <?php else: ?>
+
     <div class="d-flex justify-content-between align-items-center mt-3 mb-3">
         <h1 class="animate__animated animate__fadeInDown mb-0">List of Empanelled Hospitals</h1>
         <div class="d-flex gap-2">
@@ -167,7 +209,7 @@ function get_status($valid_upto) {
                 </a>
             <?php endif; ?>
             <a href="logout.php" class="btn btn-outline-danger"><i class="fas fa-sign-out-alt me-2"></i>Logout</a>
-        
+
         </div>
     </div>
 
@@ -276,6 +318,8 @@ function get_status($valid_upto) {
 </tbody>
         </table>
     </div>
+
+    <?php endif; // End of the else block for db_error check ?>
 </div>
 
 

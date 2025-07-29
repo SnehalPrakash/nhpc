@@ -42,6 +42,7 @@ if (!empty($_GET['status'])) {
     }
 }
 
+
 if (!empty($whereClauses)) {
     $sql .= " WHERE " . implode(' AND ', $whereClauses);
 }
@@ -53,10 +54,10 @@ $filename = "hospitals_admin_export_" . date('Y-m-d') . ".csv";
 header('Content-Type: text/csv; charset=utf-8');
 header('Content-Disposition: attachment; filename="' . $filename . '"');
 
-
+// Open output stream
 $output = fopen('php://output', 'w');
 
-
+// Add CSV header
 $header = [
     'ID', 'Name (EN)', 'Name (HI)', 'Address (EN)', 'Address (HI)', 
     'State', 'Payment Scheme', 'Contact Person', 'Contact Number', 
@@ -68,9 +69,9 @@ try {
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
 
-
+    // Loop through results and write to CSV
     while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-
+        // Manually select which columns to export
         $csvRow = [
             $row['id'],
             $row['name_en'],

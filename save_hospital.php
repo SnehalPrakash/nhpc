@@ -91,31 +91,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     try {
         $stmt = $pdo->prepare(
-            "INSERT INTO hospitals (
-                name_en, name_hi, address_en, address_hi, state, payment_scheme,
-                contact_person, contact_number, valid_from, valid_upto, reg_valid_upto,
-                remarks_en, remarks_hi, approv_order_accomodation, tariff, facilitation, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())"
-        );
+    "INSERT INTO emp_hosp_name (
+        Hosp_name, Hosp_name_H, hosp_add, hosp_add_H, state, SCHEME,
+        hospital_contact_person, hospital_contact_number, valid_from, VALID_UPTO, RegValidUptoDt,
+        Rem, remarks_hi, ACC_Link_Add, LINK_ADD, Hosp_Offer
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+);
 
-        $stmt->execute([
-            $_POST['name_en'],
-            $_POST['name_hi'],
-            $_POST['address_en'],
-            $_POST['address_hi'],
-            $_POST['state'],
-            $_POST['payment_scheme'],
-            $_POST['contact_person'],
-            $_POST['contact_number'],
-            !empty($_POST['valid_from']) ? $_POST['valid_from'] : null,
-            !empty($_POST['valid_upto']) ? $_POST['valid_upto'] : null,
-            !empty($_POST['reg_valid_upto']) ? $_POST['reg_valid_upto'] : null,
-            $_POST['remarks_en'],
-            $_POST['remarks_hi'],
-            $approv_order_res['path'],
-            $tariff_res['path'],
-            $facilitation_res['path']
-        ]);
+        // Corrected execute call in save_hospital.php
+            // Corrected execute call in save_hospital.php
+                $stmt->execute([
+                    $_POST['Hosp_name'],
+                    $_POST['Hosp_name_H'],
+                    $_POST['hosp_add'],
+                    $_POST['hosp_add_H'],
+                    $_POST['state'],
+                    $_POST['SCHEME'],
+                    $_POST['hospital_contact_person'],
+                    $_POST['hospital_contact_number'],
+                    !empty($_POST['valid_from']) ? $_POST['valid_from'] : null,
+                    !empty($_POST['VALID_UPTO']) ? $_POST['VALID_UPTO'] : null,
+                    !empty($_POST['RegValidUptoDt']) ? $_POST['RegValidUptoDt'] : null,
+                    $_POST['Rem'],
+                    $_POST['remarks_hi'],
+                    $approv_order_res['path'], // Corresponds to ACC_Link_Add
+                    $tariff_res['path'],       // Corresponds to LINK_ADD
+                    $facilitation_res['path']  // Corresponds to Hosp_Offer
+                ]);
 
         $_SESSION['success'] = 'Hospital added successfully.';
         header('Location: index.php');
