@@ -1,2 +1,9 @@
 ini_set('display_errors', 1);
 error_reporting(E_ALL);
+
+///admin check in check session.php*****
+//function can_edit() {
+    return isset($_SESSION['role']) && ($_SESSION['role'] === 'admin' || $_SESSION['role'] === 'user');
+}
+////*****
+
