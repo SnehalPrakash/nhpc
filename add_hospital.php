@@ -8,12 +8,21 @@ if (!can_edit()) {
     exit;
 }
 
-$_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
 $csrf_token = $_SESSION['csrf_token'];
 
-// Fetch states with their IDs for the dropdown
+
 $states_stmt = $pdo->query("SELECT Loc_id, loc_name FROM emp_hosp_loc ORDER BY loc_name ASC");
 $states = $states_stmt->fetchAll();
+
+
+$errors = $_SESSION['errors'] ?? [];
+$old_input = $_SESSION['old_input'] ?? [];
+unset($_SESSION['errors'], $_SESSION['old_input']);
+
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -110,96 +119,116 @@ $states = $states_stmt->fetchAll();
 <div class="container">
     <img src="logo.jpeg" alt="NHPC Logo" class="header-image">
     <h2 class="animate__animated animate__fadeInDown">Add Hospital Details</h2>
-
-    <!-- Error display logic remains here -->
+    
+    <?php if (isset($_SESSION['error'])): ?>
+        <div class="alert alert-danger">
+            <?php echo htmlspecialchars($_SESSION['error']); unset($_SESSION['error']); ?>
+        </div>
+    <?php endif; ?>
+    <?php if (isset($_SESSION['success'])): ?>
+        <div class="alert alert-success">
+            <?php echo htmlspecialchars($_SESSION['success']); unset($_SESSION['success']); ?>
+        </div>
+    <?php endif; ?>
 
     <form action="save_hospital.php" method="post" enctype="multipart/form-data" class="animate__animated animate__fadeIn animate__delay-1s needs-validation" novalidate>
         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
         <div class="row mb-4">
             <div class="col-md-6 mb-3">
                 <label class="form-label">Name (English) <span class="text-danger">*</span></label>
-                <input type="text" name="Hosp_name" class="form-control" required placeholder="Enter hospital name in English">
+                <input type="text" name="Hosp_name" class="form-control <?php echo isset($errors['Hosp_name']) ? 'is-invalid' : ''; ?>" required placeholder="Enter hospital name in English" value="<?php echo htmlspecialchars($old_input['Hosp_name'] ?? ''); ?>">
+                <?php if (isset($errors['Hosp_name'])): ?><div class="invalid-feedback"><?php echo $errors['Hosp_name']; ?></div><?php endif; ?>
             </div>
             <div class="col-md-6 mb-3">
                 <label class="form-label">Name (Hindi)</label>
-                <input type="text" name="Hosp_name_H" class="form-control" placeholder="Enter hospital name in Hindi">
+                <input type="text" name="Hosp_name_H" class="form-control" placeholder="Enter hospital name in Hindi" value="<?php echo htmlspecialchars($old_input['Hosp_name_H'] ?? ''); ?>">
             </div>
         </div>
 
         <div class="row mb-4">
             <div class="col-md-6 mb-3">
                 <label class="form-label">Address (English) <span class="text-danger">*</span></label>
-                <textarea name="hosp_add" class="form-control" required placeholder="Enter complete address in English" rows="3"></textarea>
+                <textarea name="hosp_add" class="form-control <?php echo isset($errors['hosp_add']) ? 'is-invalid' : ''; ?>" required placeholder="Enter complete address in English" rows="3"><?php echo htmlspecialchars($old_input['hosp_add'] ?? ''); ?></textarea>
+                <?php if (isset($errors['hosp_add'])): ?><div class="invalid-feedback"><?php echo $errors['hosp_add']; ?></div><?php endif; ?>
             </div>
             <div class="col-md-6 mb-3">
                 <label class="form-label">Address (Hindi)</label>
-                <textarea name="hosp_add_H" class="form-control" placeholder="Enter complete address in Hindi" rows="3"></textarea>
+                <textarea name="hosp_add_H" class="form-control" placeholder="Enter complete address in Hindi" rows="3"><?php echo htmlspecialchars($old_input['hosp_add_H'] ?? ''); ?></textarea>
             </div>
         </div>
 
         <div class="row mb-4">
             <div class="col-md-6 mb-3">
                 <label class="form-label">State <span class="text-danger">*</span></label>
-                <select name="LOC_CODE" class="form-control" required>
+                <select name="LOC_CODE" class="form-control <?php echo isset($errors['LOC_CODE']) ? 'is-invalid' : ''; ?>" required>
                     <option value="">Select State</option>
                     <?php foreach ($states as $state): ?>
-                        <option value="<?php echo htmlspecialchars($state['Loc_id']); ?>"><?php echo htmlspecialchars($state['loc_name']); ?></option>
+                        <option value="<?php echo htmlspecialchars($state['Loc_id']); ?>" <?php if (($old_input['LOC_CODE'] ?? '') == $state['Loc_id']) echo 'selected'; ?>>
+                            <?php echo htmlspecialchars($state['loc_name']); ?>
+                        </option>
                     <?php endforeach; ?>
                 </select>
+                <?php if (isset($errors['LOC_CODE'])): ?><div class="invalid-feedback"><?php echo $errors['LOC_CODE']; ?></div><?php endif; ?>
             </div>
             <div class="col-md-6 mb-3">
                 <label class="form-label">Payment Scheme <span class="text-danger">*</span></label>
-                <select name="SCHEME" class="form-control" required>
+                <select name="SCHEME" class="form-control <?php echo isset($errors['SCHEME']) ? 'is-invalid' : ''; ?>" required>
                     <option value="">Select Payment Scheme</option>
-                    <option value="D">Direct Payment</option>
-                    <option value="N">Non-Direct Payment</option>
+                    <option value="D" <?php if (($old_input['SCHEME'] ?? '') == 'D') echo 'selected'; ?>>Direct Payment</option>
+                    <option value="N" <?php if (($old_input['SCHEME'] ?? '') == 'N') echo 'selected'; ?>>Non-Direct Payment</option>
                 </select>
+                <?php if (isset($errors['SCHEME'])): ?><div class="invalid-feedback"><?php echo $errors['SCHEME']; ?></div><?php endif; ?>
             </div>
         </div>
 
         <div class="row mb-4">
             <div class="col-md-6 mb-3">
                 <label class="form-label">Contact Person</label>
-                <input type="text" name="Cont_person" class="form-control" placeholder="Enter contact person name">
+                <input type="text" name="Cont_person" class="form-control" placeholder="Enter contact person name" value="<?php echo htmlspecialchars($old_input['Cont_person'] ?? ''); ?>">
             </div>
             <div class="col-md-6 mb-3">
                 <label class="form-label">Contact Number</label>
-                <input type="tel" name="Cont_no" class="form-control" pattern="[0-9]{10}" placeholder="Enter 10-digit contact number">
+                <input type="tel" name="Cont_no" class="form-control <?php echo isset($errors['Cont_no']) ? 'is-invalid' : ''; ?>" pattern="[0-9]{10}" placeholder="Enter 10-digit contact number" value="<?php echo htmlspecialchars($old_input['Cont_no'] ?? ''); ?>">
+                <?php if (isset($errors['Cont_no'])): ?><div class="invalid-feedback"><?php echo $errors['Cont_no']; ?></div><?php endif; ?>
             </div>
         </div>
 
         <div class="row mb-4">
             <div class="col-md-4 mb-3">
                 <label class="form-label">Valid From</label>
-                <input type="date" name="valid_from" class="form-control">
+                <input type="date" name="valid_from" class="form-control" value="<?php echo htmlspecialchars($old_input['valid_from'] ?? ''); ?>">
             </div>
             <div class="col-md-4 mb-3">
                 <label class="form-label">Valid Upto</label>
-                <input type="date" name="VALID_UPTO" class="form-control">
+                <input type="date" name="VALID_UPTO" class="form-control <?php echo isset($errors['VALID_UPTO']) ? 'is-invalid' : ''; ?>" value="<?php echo htmlspecialchars($old_input['VALID_UPTO'] ?? ''); ?>">
+                <?php if (isset($errors['VALID_UPTO'])): ?><div class="invalid-feedback"><?php echo $errors['VALID_UPTO']; ?></div><?php endif; ?>
             </div>
             <div class="col-md-4 mb-3">
                 <label class="form-label">Registration Valid Upto</label>
-                <input type="date" name="RegValidUptoDt" class="form-control">
+                <input type="date" name="RegValidUptoDt" class="form-control" value="<?php echo htmlspecialchars($old_input['RegValidUptoDt'] ?? ''); ?>">
             </div>
         </div>
 
         <div class="mb-4">
             <label class="form-label">Remarks</label>
-            <textarea name="Rem" class="form-control" placeholder="Enter remarks" rows="2"></textarea>
+            <textarea name="Rem" class="form-control" placeholder="Enter remarks" rows="2"><?php echo htmlspecialchars($old_input['Rem'] ?? ''); ?></textarea>
         </div>
 
         <div class="row mb-4">
             <div class="col-md-4 mb-3">
                 <label class="form-label">Approval Order Document</label>
                 <input type="file" name="ACC_Link_Add" class="form-control" accept=".pdf,.jpg,.jpeg,.png">
+                <?php if (isset($errors['ACC_Link_Add'])): ?><div class="invalid-feedback d-block"><?php echo $errors['ACC_Link_Add']; ?></div><?php endif; ?>
             </div>
             <div class="col-md-4 mb-3">
                 <label class="form-label">Tariff Document</label>
                 <input type="file" name="LINK_ADD" class="form-control" accept=".pdf,.jpg,.jpeg,.png">
+                <?php if (isset($errors['LINK_ADD'])): ?><div class="invalid-feedback d-block"><?php echo $errors['LINK_ADD']; ?></div><?php endif; ?>
             </div>
             <div class="col-md-4 mb-3">
                 <label class="form-label">Facilitation Document</label>
                 <input type="file" name="Hosp_Offer" class="form-control" accept=".pdf,.jpg,.jpeg,.png">
+                <?php if (isset($errors['Hosp_Offer'])): ?><div class="invalid-feedback d-block"><?php echo $errors['Hosp_Offer']; ?></div><?php endif; ?>
             </div>
         </div>
 
@@ -249,23 +278,27 @@ document.addEventListener('DOMContentLoaded', function() {
     const validFrom = document.querySelector('input[name="valid_from"]');
     const validUpto = document.querySelector('input[name="VALID_UPTO"]');
     const regValidUpto = document.querySelector('input[name="RegValidUptoDt"]');
-    const contactNumber = document.querySelector('input[name="hospital_contact_number"]');
+    const contactNumber = document.querySelector('input[name="Cont_no"]');
 
-    validUpto.addEventListener('change', function() {
-        if (validFrom.value && validUpto.value && validFrom.value > validUpto.value) {
-            validUpto.setCustomValidity('Valid Upto date must be after Valid From date');
-        } else {
-            validUpto.setCustomValidity('');
-        }
-    });
+    if (validUpto && validFrom) {
+        validUpto.addEventListener('change', function() {
+            if (validFrom.value && validUpto.value && validFrom.value > validUpto.value) {
+                validUpto.setCustomValidity('Valid Upto date must be after Valid From date');
+            } else {
+                validUpto.setCustomValidity('');
+            }
+        });
 
-    validFrom.addEventListener('change', function() {
-        validUpto.dispatchEvent(new Event('change'));
-    });
+        validFrom.addEventListener('change', function() {
+            validUpto.dispatchEvent(new Event('change'));
+        });
+    }
 
-    contactNumber.addEventListener('input', function() {
-        this.value = this.value.replace(/[^0-9]/g, '').slice(0, 10);
-    });
+    if (contactNumber) {
+        contactNumber.addEventListener('input', function() {
+            this.value = this.value.replace(/[^0-9]/g, '').slice(0, 10);
+        });
+    }
 });
 </script>
 </body>

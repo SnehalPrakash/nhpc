@@ -1,13 +1,13 @@
 <?php
 require 'db.php';
 
-// --- Server-Side Filtering Logic ---
+
 $db_error = null;
 $hospitals = [];
 $states = [];
 
 try {
-    // Base SQL query with correct column names and JOIN
+
     $sql = "SELECT 
                 h.hosp_id, h.Hosp_name, h.Hosp_name_H, h.hosp_add, h.hosp_add_H, 
                 h.VALID_UPTO, h.RegValidUptoDt, h.Rem, h.ACC_Link_Add, h.LINK_ADD, 
@@ -16,10 +16,10 @@ try {
             LEFT JOIN emp_hosp_loc AS l ON h.LOC_CODE = l.Loc_id";
 
     $params = [];
-    // Base condition for public viewer: only show active or soon-to-expire hospitals.
+
     $whereClauses = ["(h.VALID_UPTO IS NULL OR h.VALID_UPTO >= CURDATE())"];
 
-    // Handle search term filter
+
     if (!empty($_GET['search'])) {
         $searchTerm = '%' . htmlspecialchars($_GET['search']) . '%';
         $whereClauses[] = "(h.Hosp_name LIKE ? OR h.hosp_add LIKE ? OR h.Hosp_name_H LIKE ? OR h.hosp_add_H LIKE ?)";
@@ -29,19 +29,19 @@ try {
         $params[] = $searchTerm;
     }
 
-    // Handle state filter
+
     if (!empty($_GET['state'])) {
         $whereClauses[] = "h.LOC_CODE = ?";
         $params[] = $_GET['state'];
     }
 
-    // Handle scheme filter
+
     if (!empty($_GET['scheme'])) {
         $whereClauses[] = "h.SCHEME = ?";
         $params[] = $_GET['scheme'];
     }
     
-    // Handle status filter for viewer page
+
     if (!empty($_GET['status'])) {
         $status = $_GET['status'];
         if ($status === 'Active') {
@@ -63,7 +63,7 @@ try {
     $stmt->execute($params);
     $hospitals = $stmt->fetchAll();
 
-    // Fetch states for the dropdown filter
+
     $states_stmt = $pdo->query("SELECT Loc_id, loc_name FROM emp_hosp_loc ORDER BY loc_name ASC");
     $states = $states_stmt->fetchAll();
 
