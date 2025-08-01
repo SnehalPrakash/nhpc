@@ -1,18 +1,12 @@
 <?php
-session_start(); // Start session 
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
-// Redirect to login page if !admin or logged in
+require_once __DIR__ . '/includes/functions.php';
+
+
 if (!isset($_SESSION['user_id'])) {
     header('Location: login.php');
     exit;
-}
-
-// Returns true if the current user is an admin
-function is_admin() {
-    return isset($_SESSION['role']) && $_SESSION['role'] === 'admin';
-}
-
-// Returns true if the user can edit hospital data (admin or user)
-function can_edit() {
- return true;
 }

@@ -1,16 +1,14 @@
 <?php
-ini_set('display_errors', 1);
-error_reporting(E_ALL);
 require 'check_session.php';
 require 'db.php';
 
-// --- Server-Side Filtering Logic ---
+
 $db_error = null;
 $hospitals = [];
 $states = [];
 
 try {
-    // Base SQL query with correct column names and JOIN
+
     $sql = "SELECT 
                 h.hosp_id, h.Hosp_name, h.Hosp_name_H, h.hosp_add, h.hosp_add_H, 
                 h.VALID_UPTO, h.RegValidUptoDt, h.Rem, h.ACC_Link_Add, h.LINK_ADD, 
@@ -21,7 +19,7 @@ try {
     $params = [];
     $whereClauses = [];
 
-    // Handle search term filter (now includes Hindi fields)
+
     if (!empty($_GET['search'])) {
         $searchTerm = '%' . htmlspecialchars($_GET['search']) . '%';
         $whereClauses[] = "(h.Hosp_name LIKE ? OR h.hosp_add LIKE ? OR h.Hosp_name_H LIKE ? OR h.hosp_add_H LIKE ?)";
@@ -31,19 +29,19 @@ try {
         $params[] = $searchTerm;
     }
 
-    // Handle state filter using LOC_CODE
+
     if (!empty($_GET['state'])) {
         $whereClauses[] = "h.LOC_CODE = ?";
         $params[] = $_GET['state'];
     }
 
-    // Handle payment scheme filter
+
     if (!empty($_GET['scheme'])) {
         $whereClauses[] = "h.SCHEME = ?";
         $params[] = $_GET['scheme'];
     }
 
-    // Handle status filter
+
     if (!empty($_GET['status'])) {
         $status = $_GET['status'];
         if ($status === 'Active') {
@@ -67,7 +65,7 @@ try {
     $stmt->execute($params);
     $hospitals = $stmt->fetchAll();
 
-    // Fetch states for the dropdown filter
+ 
     $states_stmt = $pdo->query("SELECT Loc_id, loc_name FROM emp_hosp_loc ORDER BY loc_name ASC");
     $states = $states_stmt->fetchAll();
 
@@ -261,52 +259,58 @@ function get_status($valid_upto) {
                 </tr>
             </thead>
             <tbody>
-            <?php $serialNumber = 1; foreach ($hospitals as $row): $status = get_status($row['VALID_UPTO']); ?>
+            <?php if (empty($hospitals)): ?>
                 <tr>
-                    <td class="text-center"><?php echo $serialNumber++; ?></td>
-                    <td>
-                        <strong><?php echo htmlspecialchars($row['Hosp_name']); ?></strong><br>//<br>
-                        <small class="text-muted"><?php echo htmlspecialchars($row['Hosp_name_H']); ?></small>
-                    </td>
-                    <td>
-                        <?php echo htmlspecialchars($row['hosp_add']); ?><br>//<br>
-                        <small class="text-muted"><?php echo htmlspecialchars($row['hosp_add_H']); ?></small>
-                    </td>
-                    <td class="text-center"><?php echo htmlspecialchars($row['loc_name']); ?></td>
-                    <td class="text-center">
-                        <?php echo htmlspecialchars($row['Cont_person']); ?><br>
-                        <small class="text-muted"><?php echo htmlspecialchars($row['Cont_no']); ?></small>
-                    </td>
-                    <td class="text-center"><span class="badge <?php echo $status['class']; ?>"><?php echo $status['text']; ?></span></td>
-                    <td>
-                        <div class="d-flex justify-content-center gap-2">
-                            <button class="btn btn-sm btn-info view-btn" 
-                                data-bs-toggle="modal" data-bs-target="#viewHospitalModal"
-                                data-name-en="<?php echo htmlspecialchars($row['Hosp_name']); ?>"
-                                data-name-hi="<?php echo htmlspecialchars($row['Hosp_name_H']); ?>"
-                                data-address-en="<?php echo htmlspecialchars($row['hosp_add']); ?>"
-                                data-address-hi="<?php echo htmlspecialchars($row['hosp_add_H']); ?>"
-                                data-state="<?php echo htmlspecialchars($row['loc_name']); ?>"
-                                data-scheme="<?php echo htmlspecialchars($row['SCHEME']); ?>"
-                                data-contact-person="<?php echo htmlspecialchars($row['Cont_person']); ?>"
-                                data-contact-number="<?php echo htmlspecialchars($row['Cont_no']); ?>"
-                                data-valid-from="<?php echo htmlspecialchars($row['valid_from'] ? date('d-M-Y', strtotime($row['valid_from'])) : 'N/A'); ?>"
-                                data-valid-upto="<?php echo htmlspecialchars($row['VALID_UPTO'] ? date('d-M-Y', strtotime($row['VALID_UPTO'])) : 'N/A'); ?>"
-                                data-reg-valid-upto="<?php echo htmlspecialchars($row['RegValidUptoDt'] ? date('d-M-Y', strtotime($row['RegValidUptoDt'])) : 'N/A'); ?>"
-                                data-remarks="<?php echo htmlspecialchars($row['Rem']); ?>"
-                                data-doc-approval="<?php echo htmlspecialchars($row['ACC_Link_Add']); ?>"
-                                data-doc-tariff="<?php echo htmlspecialchars($row['LINK_ADD']); ?>"
-                                data-doc-offer="<?php echo htmlspecialchars($row['Hosp_Offer']); ?>">
-                                <i class="fas fa-eye me-1"></i>View
-                            </button>
-                            <?php if (can_edit()): ?>
-                                <a href="edit_hospital.php?id=<?php echo $row['hosp_id']; ?>" class="btn btn-sm btn-primary"><i class="fas fa-edit me-1"></i>Edit</a>
-                                <a href="delete_hospital.php?id=<?php echo $row['hosp_id']; ?>" class="btn btn-sm btn-danger" onclick="return confirm('Are you sure?');"><i class="fas fa-trash-alt me-1"></i>Delete</a>
-                            <?php endif; ?>
-                        </div>
-                    </td>
+                    <td colspan="7" class="text-center">No hospitals found matching your criteria.</td>
                 </tr>
-            <?php endforeach; ?>
+            <?php else: ?>
+                <?php $serialNumber = 1; foreach ($hospitals as $row): $status = get_status($row['VALID_UPTO']); ?>
+                    <tr>
+                        <td class="text-center"><?php echo $serialNumber++; ?></td>
+                        <td>
+                            <strong><?php echo htmlspecialchars($row['Hosp_name']); ?></strong><br>//<br>
+                            <small class="text-muted"><?php echo htmlspecialchars($row['Hosp_name_H']); ?></small>
+                        </td>
+                        <td>
+                            <?php echo htmlspecialchars($row['hosp_add']); ?><br>//<br>
+                            <small class="text-muted"><?php echo htmlspecialchars($row['hosp_add_H']); ?></small>
+                        </td>
+                        <td class="text-center"><?php echo htmlspecialchars($row['loc_name']); ?></td>
+                        <td class="text-center">
+                            <?php echo htmlspecialchars($row['Cont_person']); ?><br>
+                            <small class="text-muted"><?php echo htmlspecialchars($row['Cont_no']); ?></small>
+                        </td>
+                        <td class="text-center"><span class="badge <?php echo $status['class']; ?>"><?php echo $status['text']; ?></span></td>
+                        <td>
+                            <div class="d-flex justify-content-center gap-2">
+                                <button class="btn btn-sm btn-info view-btn" 
+                                    data-bs-toggle="modal" data-bs-target="#viewHospitalModal"
+                                    data-name-en="<?php echo htmlspecialchars($row['Hosp_name']); ?>"
+                                    data-name-hi="<?php echo htmlspecialchars($row['Hosp_name_H']); ?>"
+                                    data-address-en="<?php echo htmlspecialchars($row['hosp_add']); ?>"
+                                    data-address-hi="<?php echo htmlspecialchars($row['hosp_add_H']); ?>"
+                                    data-state="<?php echo htmlspecialchars($row['loc_name']); ?>"
+                                    data-scheme="<?php echo htmlspecialchars($row['SCHEME']); ?>"
+                                    data-contact-person="<?php echo htmlspecialchars($row['Cont_person']); ?>"
+                                    data-contact-number="<?php echo htmlspecialchars($row['Cont_no']); ?>"
+                                    data-valid-from="<?php echo htmlspecialchars($row['valid_from'] ? date('d-M-Y', strtotime($row['valid_from'])) : 'N/A'); ?>"
+                                    data-valid-upto="<?php echo htmlspecialchars($row['VALID_UPTO'] ? date('d-M-Y', strtotime($row['VALID_UPTO'])) : 'N/A'); ?>"
+                                    data-reg-valid-upto="<?php echo htmlspecialchars($row['RegValidUptoDt'] ? date('d-M-Y', strtotime($row['RegValidUptoDt'])) : 'N/A'); ?>"
+                                    data-remarks="<?php echo htmlspecialchars($row['Rem']); ?>"
+                                    data-doc-approval="<?php echo htmlspecialchars($row['ACC_Link_Add']); ?>"
+                                    data-doc-tariff="<?php echo htmlspecialchars($row['LINK_ADD']); ?>"
+                                    data-doc-offer="<?php echo htmlspecialchars($row['Hosp_Offer']); ?>">
+                                    <i class="fas fa-eye me-1"></i>View
+                                </button>
+                                <?php if (can_edit()): ?>
+                                    <a href="edit_hospital.php?id=<?php echo $row['hosp_id']; ?>" class="btn btn-sm btn-primary"><i class="fas fa-edit me-1"></i>Edit</a>
+                                    <a href="delete_hospital.php?id=<?php echo $row['hosp_id']; ?>" class="btn btn-sm btn-danger" onclick="return confirm('Are you sure?');"><i class="fas fa-trash-alt me-1"></i>Delete</a>
+                                <?php endif; ?>
+                            </div>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+            <?php endif; ?>
             </tbody>
         </table>
     </div>

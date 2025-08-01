@@ -13,48 +13,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         header('Location: add_hospital.php');
         exit;
     }
-    unset($_SESSION['csrf_token']);
     
+
+    $errors = [];
+    $input = $_POST;
+
+    if (empty(trim($input['Hosp_name']))) {
+        $errors['Hosp_name'] = 'Hospital Name (English) is required.';
+    }
+    if (empty(trim($input['hosp_add']))) {
+        $errors['hosp_add'] = 'Address (English) is required.';
+    }
+    if (empty($input['LOC_CODE'])) {
+        $errors['LOC_CODE'] = 'Please select a state.';
+    }
+    if (empty($input['SCHEME'])) {
+        $errors['SCHEME'] = 'Please select a payment scheme.';
+    }
+    if (!empty($input['Cont_no']) && !preg_match('/^[0-9]{10}$/', $input['Cont_no'])) {
+        $errors['Cont_no'] = 'Contact number must be 10 digits.';
+    }
+    if (!empty($input['valid_from']) && !empty($input['VALID_UPTO'])) {
+        if (strtotime($input['valid_from']) > strtotime($input['VALID_UPTO'])) {
+            $errors['VALID_UPTO'] = 'The "Valid Upto" date cannot be earlier than the "Valid From" date.';
+        }
+    }
+
+
     $uploadDir = 'emp_hospital/HospRateList/';
     if (!is_dir($uploadDir)) {
         mkdir($uploadDir, 0775, true);
     }
 
-    function handle_upload(string $fileKey, string $uploadDir): array {
-        if (isset($_FILES[$fileKey]) && $_FILES[$fileKey]['error'] === UPLOAD_ERR_OK) {
-            if ($_FILES[$fileKey]['size'] > 10000000) { // 10MB limit
-                return ['error' => 'File ' . htmlspecialchars($fileKey) . ' is too large. Max 10MB.'];
-            }
-            $allowed_types = ['application/pdf', 'image/jpeg', 'image/png'];
-            $finfo = new finfo(FILEINFO_MIME_TYPE);
-            $mime_type = $finfo->file($_FILES[$fileKey]['tmp_name']);
-            if (!in_array($mime_type, $allowed_types)) {
-                return ['error' => 'Invalid file type for ' . htmlspecialchars($fileKey) . '. Only PDF, JPG, PNG are allowed.'];
-            }
-            $filename = uniqid() . '_' . basename(htmlspecialchars($_FILES[$fileKey]['name']));
-            $target_path = $uploadDir . $filename;
-            if (move_uploaded_file($_FILES[$fileKey]['tmp_name'], $target_path)) {
-                return ['path' => $target_path];
-            } else {
-                return ['error' => 'Failed to move uploaded file for ' . htmlspecialchars($fileKey) . '.'];
-            }
-        } elseif (isset($_FILES[$fileKey]) && $_FILES[$fileKey]['error'] !== UPLOAD_ERR_NO_FILE) {
-            return ['error' => 'An error occurred during file upload for ' . htmlspecialchars($fileKey) . '.'];
-        }
-        return ['path' => null];
-    }
+    $approv_order_res = handle_file_upload('ACC_Link_Add', $uploadDir);
+    $tariff_res = handle_file_upload('LINK_ADD', $uploadDir);
+    $facilitation_res = handle_file_upload('Hosp_Offer', $uploadDir);
 
-    $approv_order_res = handle_upload('ACC_Link_Add', $uploadDir);
-    $tariff_res = handle_upload('LINK_ADD', $uploadDir);
-    $facilitation_res = handle_upload('Hosp_Offer', $uploadDir);
+    if (isset($approv_order_res['error'])) $errors['ACC_Link_Add'] = $approv_order_res['error'];
+    if (isset($tariff_res['error'])) $errors['LINK_ADD'] = $tariff_res['error'];
+    if (isset($facilitation_res['error'])) $errors['Hosp_Offer'] = $facilitation_res['error'];
 
-    $errors = [];
-    if (isset($approv_order_res['error'])) $errors[] = $approv_order_res['error'];
-    if (isset($tariff_res['error'])) $errors[] = $tariff_res['error'];
-    if (isset($facilitation_res['error'])) $errors[] = $facilitation_res['error'];
 
     if (!empty($errors)) {
-        $_SESSION['error'] = implode('<br>', $errors);
+        $_SESSION['errors'] = $errors;
+        $_SESSION['old_input'] = $input;
+        $_SESSION['error'] = 'Please correct the errors below.';
         header('Location: add_hospital.php');
         exit;
     }
@@ -68,32 +71,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         );
 
-        $hosp_id = substr(uniqid(), -4); 
+
+        $hosp_id = bin2hex(random_bytes(16)); 
 
         $stmt->execute([
             $hosp_id,
-            $_POST['Hosp_name'],
-            $_POST['Hosp_name_H'],
-            $_POST['hosp_add'],
-            $_POST['hosp_add_H'],
-            $_POST['LOC_CODE'],
-            $_POST['SCHEME'],
-            $_POST['Cont_person'],
-            $_POST['Cont_no'],
-            !empty($_POST['valid_from']) ? $_POST['valid_from'] : null,
-            !empty($_POST['VALID_UPTO']) ? $_POST['VALID_UPTO'] : null,
-            !empty($_POST['RegValidUptoDt']) ? $_POST['RegValidUptoDt'] : null,
-            $_POST['Rem'],
+            $input['Hosp_name'],
+            $input['Hosp_name_H'],
+            $input['hosp_add'],
+            $input['hosp_add_H'],
+            $input['LOC_CODE'],
+            $input['SCHEME'],
+            $input['Cont_person'],
+            $input['Cont_no'],
+            !empty($input['valid_from']) ? $input['valid_from'] : null,
+            !empty($input['VALID_UPTO']) ? $input['VALID_UPTO'] : null,
+            !empty($input['RegValidUptoDt']) ? $input['RegValidUptoDt'] : null,
+            $input['Rem'],
             $approv_order_res['path'],
             $tariff_res['path'],
             $facilitation_res['path']
         ]);
-
+        unset($_SESSION['csrf_token']);
+        unset($_SESSION['old_input']);
+        unset($_SESSION['errors']);
         $_SESSION['success'] = 'Hospital added successfully.';
         header('Location: index.php');
         exit;
     } catch (PDOException $e) {
-        $_SESSION['error'] = 'Database error: ' . $e->getMessage();
+
+        error_log("Save Hospital DB Error: " . $e->getMessage());
+        $_SESSION['error'] = 'A database error occurred. Please try again or contact an administrator.';
+
+        $_SESSION['old_input'] = $input;
         header('Location: add_hospital.php');
         exit;
     }
